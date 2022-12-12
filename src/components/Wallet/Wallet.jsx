@@ -59,7 +59,6 @@ const Wallet = ({ tokens }) => {
   }, [activeToken, isConnected]);
 
   const handleChooseToken = (e) => {
-    e.preventDefault();
     const token = tokens.find((item) => item.name === e.target.value);
     setActiveToken(token);
   };
