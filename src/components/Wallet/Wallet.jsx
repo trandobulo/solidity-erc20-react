@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 
 import TransactionsTable from "../TransactionsTable/TransactionsTable";
-import Credentials from "../Credentials.jsx/Credentials";
-import Button from "@mui/material/Button";
+import Credentials from "../Credentials/Credentials";
 
 import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
@@ -22,12 +21,13 @@ import Avatar from "@mui/material/Avatar";
 const Wallet = ({ tokens }) => {
   const [transactions, setTransactions] = useState([]);
   const [balanceInfo, setBalanceInfo] = useState({
-    address: "Connect wallet",
-    balance: "Connect wallet",
+    address: "",
+    balance: "",
   });
   const [addressesToSend, setAddressesToSend] = useState([""]);
   const [amountsToSend, setAmountsToSend] = useState([""]);
   const [activeToken, setActiveToken] = useState(tokens && tokens[0]);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -37,16 +37,17 @@ const Wallet = ({ tokens }) => {
       provider
     );
 
-    token.on("Transfer", async (from, to, amount, event) => {
+    getWalletBalance();
+
+    token.on("Transfer", async (from, to, amount) => {
+      getWalletBalance();
       const decimals = await token.decimals();
       setTransactions((currentTransactions) => [
         ...currentTransactions,
         {
-          address: String(
-            to.substring(0, 4) + "..." + to.substring(to.length - 5)
-          ),
+          address: `${to.substring(0, 4)}...${to.substring(to.length - 5)}`,
           token: activeToken.name,
-          amount: String(amount / 10 ** decimals),
+          amount: `${amount / 10 ** decimals}`,
           time: new Date().toLocaleString(),
         },
       ]);
@@ -55,7 +56,7 @@ const Wallet = ({ tokens }) => {
     return () => {
       token.removeAllListeners();
     };
-  }, [activeToken]);
+  }, [activeToken, isConnected]);
 
   const handleChooseToken = (e) => {
     e.preventDefault();
@@ -63,12 +64,20 @@ const Wallet = ({ tokens }) => {
     setActiveToken(token);
   };
 
-  const handleConnectToWallet = async () => {
+  const getWalletBalance = async () => {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);
+    const accounts = await provider.send("eth_requestAccounts", []);
 
-    const signer = await provider.getSigner();
-    const signerAddress = await signer.getAddress();
+    const signerAddress = await provider.getSigner().getAddress();
+
+    if (ethereum.isConnected()) {
+      setIsConnected(true);
+      console.log("connected");
+    } else {
+      setIsConnected(false);
+      console.log("disconnected");
+    }
+
     const token = new ethers.Contract(
       activeToken.contractAddress,
       activeToken.abi,
@@ -84,56 +93,70 @@ const Wallet = ({ tokens }) => {
   };
 
   const handleAddressInput = (e) => {
-    e.preventDefault();
     const arr = [...addressesToSend];
-    arr[arr.findIndex((item, index) => `address-${index}` === e.target.id)] =
-      e.target.value;
-    setAddressesToSend(arr);
+    const index = arr.findIndex(
+      (item, index) => `address-${index}` === e.target.id
+    );
+    if (index >= 0) {
+      arr[index] = e.target.value;
+      setAddressesToSend(arr);
+    } else {
+      throw Error("Can't find element in array");
+    }
   };
 
   const handleAmountInput = (e) => {
-    e.preventDefault();
     const arr = [...amountsToSend];
-    arr[arr.findIndex((item, index) => `amount-${index}` === e.target.id)] =
-      e.target.value;
-    setAmountsToSend(arr);
+
+    const index = arr.findIndex(
+      (item, index) => `amount-${index}` === e.target.id
+    );
+
+    if (index >= 0) {
+      arr[index] = e.target.value;
+      setAmountsToSend(arr);
+    } else {
+      throw Error("Can't find element in array");
+    }
   };
 
   const handleAddAddress = () => {
-    const addresses = [...addressesToSend];
-    addresses.push("");
-    const amounts = [...amountsToSend];
-    amounts.push("");
-    setAddressesToSend(addresses);
-    setAmountsToSend(amounts);
+    setAddressesToSend([...addressesToSend, ""]);
+    setAmountsToSend([...amountsToSend, ""]);
   };
 
   const handleDeleteAddress = (e) => {
-    e.preventDefault();
     const addresses = [...addressesToSend];
     const amounts = [...amountsToSend];
     const indexToDelete = addresses.findIndex(
-      (item, index) => `address-${index}` == e.target.id
+      (item, index) => `deleteBtn-${index}` === e.currentTarget.id
     );
-    addresses.splice(indexToDelete, 1);
-    amounts.splice(indexToDelete, 1);
-    setAddressesToSend(addresses);
-    setAmountsToSend(amounts);
+
+    if (indexToDelete >= 0) {
+      addresses.splice(indexToDelete, 1);
+      amounts.splice(indexToDelete, 1);
+      setAddressesToSend(addresses);
+      setAmountsToSend(amounts);
+    } else {
+      throw Error("Can't find element in array");
+    }
   };
 
   const handleTransfer = async () => {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();
+
     const token = new ethers.Contract(
       activeToken.contractAddress,
       activeToken.abi,
       signer
     );
+
     const decimals = await token.decimals();
-    const transaction = await token.transferToAddresses(
+    await token.transferToAddresses(
       addressesToSend,
-      amountsToSend.map((amount) => String(amount * 10 ** decimals))
+      amountsToSend.map((amount) => `${amount * 10 ** decimals}`)
     );
   };
 
@@ -176,7 +199,11 @@ const Wallet = ({ tokens }) => {
           </ListItemAvatar>
           <ListItemText
             primary="Wallet address"
-            secondary={balanceInfo.address}
+            secondary={
+              isConnected
+                ? balanceInfo.address
+                : "Please, connect to Metamask wallet and reload page"
+            }
           />
         </ListItem>
         <ListItem>
@@ -187,19 +214,17 @@ const Wallet = ({ tokens }) => {
           </ListItemAvatar>
           <ListItemText
             primary="Balance"
-            secondary={String(balanceInfo.balance)}
+            secondary={
+              isConnected
+                ? balanceInfo.balance
+                : "Please, connect to Metamask wallet and reload page"
+            }
           />
         </ListItem>
       </List>
-      <Button
-        variant="contained"
-        onClick={handleConnectToWallet}
-        sx={{ margin: "10px 0px 20px" }}
-      >
-        connect wallet
-      </Button>
+
       <Credentials
-        addressInputHandller={handleAddressInput}
+        addressInputHandler={handleAddressInput}
         amountInputHandler={handleAmountInput}
         credentialsData={{
           addressesToSend: addressesToSend,
@@ -208,6 +233,8 @@ const Wallet = ({ tokens }) => {
         handleAddAddress={handleAddAddress}
         handleTransfer={handleTransfer}
         handleDeleteAddress={handleDeleteAddress}
+        balance={balanceInfo.balance}
+        isConnected={isConnected}
       />
       <TransactionsTable transactions={transactions} />
     </Container>

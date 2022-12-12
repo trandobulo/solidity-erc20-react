@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Wallet from "../Wallet/Wallet";
 import TATokenAbi from "../../contracts/TATokenAbi";
-import detectEthereumProvider from "@metamask/detect-provider";
 import Typography from "@mui/material/Typography";
 
 function App() {
@@ -13,21 +12,8 @@ function App() {
     },
   ];
 
-  const [isProvider, setIsProvider] = useState(false);
-
-  useEffect(() => {
-    detectProvider();
-  }, [isProvider]);
-
-  const detectProvider = async () => {
-    const provider = await detectEthereumProvider();
-    setIsProvider(provider);
-  };
-
-  return isProvider ? (
-    <div className="app">
-      <Wallet tokens={TOKENS} />
-    </div>
+  return window && window.ethereum ? (
+    <Wallet tokens={TOKENS} />
   ) : (
     <Typography
       sx={{
